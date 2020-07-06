@@ -1,0 +1,6 @@
+func sum(a, b){
+    print(a + b);
+}
+
+x=4;
+sum(x, x+1);
