@@ -13,16 +13,18 @@ reserved = {
     'while': 'WHILE',
     'for': 'FOR',
     'print': 'PRINT',
-    'func': "FUNCTION"
+    'ret_func': 'RET_FUNCTION',
+    'func': 'FUNCTION',
+    'return': 'RETURN'
 }
 
 tokens = [
-             'NUMBER', 'MINUS',
-             'PLUS', 'TIMES', 'DIVIDE', 'MOD',
-             'LPAREN', 'RPAREN',
-             'AND', 'OR', 'INF', 'INFEQUAL', 'SUP', 'SUPEQUAL', 'DIFF', 'EQUAL',
-             'SEMICOLON', 'COMA', 'NAME', 'AFFECT', 'LACCO', 'RACCO',
-         ] + list(reserved.values())
+    'NUMBER', 'MINUS',
+    'PLUS', 'TIMES', 'DIVIDE', 'MOD',
+    'LPAREN', 'RPAREN',
+    'AND', 'OR', 'INF', 'INFEQUAL', 'SUP', 'SUPEQUAL', 'DIFF', 'EQUAL',
+    'SEMICOLON', 'COMA', 'NAME', 'AFFECT', 'LACCO', 'RACCO',
+] + list(reserved.values())
 
 # Tokens
 t_PLUS = r'\+'
@@ -47,11 +49,12 @@ t_EQUAL = r'=='
 t_DIFF = r'!='
 
 precedence = (
+    ('left', 'AFFECT'),
     ('left', 'OR'),
     ('left', 'AND'),
     ('left', 'INF', 'SUP', 'INFEQUAL', 'SUPEQUAL', 'EQUAL', 'DIFF'),
     ('left', 'PLUS', 'MINUS'),
-    ('left', 'TIMES', 'DIVIDE', 'MOD'),
+    ('left', 'TIMES', 'DIVIDE', 'MOD')
 )
 
 
@@ -88,17 +91,11 @@ lex.lex()
 
 
 def p_start(t):
-    """ start : block
-        | body"""
+    """ start : body"""
     t[0] = ('Program', t[1])
+    print('program: ', t[0])
     evalInst(t[0])
-    print(t[0])
     # printTreeGraph(t[0])
-
-
-# def p_instruction(p):
-#     """instruction : statement"""
-#     p[0] = p[1]
 
 
 def p_if(p):
@@ -121,16 +118,6 @@ def p_for(p):
     p[0] = ('For', p[3], p[4], p[6], p[8])
 
 
-def p_call_function(p):
-    """statement : NAME LPAREN params RPAREN SEMICOLON"""
-    p[0] = ('Call', p[1], p[3])
-
-
-def p_call_function_no_args(p):
-    """statement : NAME LPAREN RPAREN SEMICOLON"""
-    p[0] = ('Call', p[1], ('Arg',))
-
-
 def p_argument(p):
     """args : NAME"""
     p[0] = ('Arg', p[1])
@@ -151,14 +138,49 @@ def p_params(p):
     p[0] = ('Param', p[1], *p[3][1::])
 
 
+def p_return(p):
+    """statement : RETURN expression SEMICOLON"""
+    p[0] = ('Return', p[2])
+
+
+def p_return_function_with_args(p):
+    """statement : RET_FUNCTION NAME LPAREN args RPAREN block"""
+    p[0] = ('Function', p[2], p[4], p[6], False)
+
+
+def p_return_function_no_args(p):
+    """statement : RET_FUNCTION NAME LPAREN RPAREN block"""
+    p[0] = ('Function', p[2], ('Arg',), p[5], False)
+
+
 def p_function_with_args(p):
     """statement : FUNCTION NAME LPAREN args RPAREN block"""
-    p[0] = ('Function', p[2], p[4], p[6])
+    p[0] = ('Function', p[2], p[4], p[6], True)
 
 
 def p_function_no_args(p):
     """statement : FUNCTION NAME LPAREN RPAREN block"""
-    p[0] = ('Function', p[2], ('Arg',), p[5])
+    p[0] = ('Function', p[2], ('Arg',), p[5], True)
+
+
+def p_call_return_function(p):
+    """expression : NAME LPAREN params RPAREN SEMICOLON"""
+    p[0] = ('Call', p[1], p[3])
+
+
+def p_call_return_function_no_args(p):
+    """expression : NAME LPAREN RPAREN SEMICOLON"""
+    p[0] = ('Call', p[1], ('Arg',))
+
+
+def p_call_function(p):
+    """statement : NAME LPAREN params RPAREN SEMICOLON"""
+    p[0] = ('Call', p[1], p[3])
+
+
+def p_call_function_no_args(p):
+    """statement : NAME LPAREN RPAREN SEMICOLON"""
+    p[0] = ('Call', p[1], ('Arg',))
 
 
 def p_instruction(p):
@@ -169,7 +191,6 @@ def p_instruction(p):
 def p_instructions(p):
     """body : statement body"""
     p[0] = ('Block', p[1], p[2])
-    print(p[0])
 
 
 def p_block(p):
@@ -239,6 +260,18 @@ def p_expression_binop_bool(p):
     p[0] = (p[2], p[1], p[3])
 
 
+def p_statement_increment_equal(p):
+    """statement : NAME PLUS AFFECT expression
+        | NAME PLUS AFFECT expression SEMICOLON"""
+    p[0] = ('Affect', p[1], ('+', p[1], p[4]))
+
+
+def p_statement_decrement_equal(p):
+    """statement : NAME MINUS AFFECT expression
+        | NAME MINUS AFFECT expression SEMICOLON"""
+    p[0] = ('Affect', p[1], ('-', p[1], p[4]))
+
+
 def p_statement_increment(p):
     """statement : NAME PLUS PLUS
         | NAME PLUS PLUS SEMICOLON"""
@@ -265,9 +298,66 @@ import ply.yacc as yacc
 
 yacc.yacc()
 
-s = input('calc > ')
+# affectation, print
+s1 = '''x = 4; 
+        x = x + 3; 
+        print(x);'''
 
-# file = open("fibonacci.txt")
-# s = file.read()
+# affectation élargie, affectation
+s2 = '''x = 9; 
+        x += 4; 
+        x++; 
+        print(x);'''
 
-yacc.parse(s)
+# while, for
+s3 = '''x = 4; 
+        while(x < 30) { 
+            x = x + 3; 
+            print(x); 
+        } 
+        for (i = 0; i < 4; i = i + 1) { 
+            print( i * i); 
+        }'''
+
+# fonctions void avec paramètres
+s4 = '''func toto(a, b) {
+            print(a + b);
+        } 
+        toto(3, 5);'''
+
+# fonctions value avec paramètres et return explicite
+s5 = '''ret_func toto(a, b) {
+            c = a + b;
+            return c; 
+        } 
+        toto(3, 5);
+        '''
+
+# fonctions value avec paramètres et return implicite
+s6 = '''ret_func toto(a, b) {
+            c = a + b;
+            toto = c;
+        }
+        toto(3, 5);'''
+
+
+# fonctions value avec paramètres et return coupe circuit
+s7 = '''fonctionValue toto(a, b) { 
+            c = a + b; 
+            return c; 
+            print(666); 
+        } 
+        x = toto(3, 5); 
+        print(x);'''
+
+# fonctions value avec paramètres, return coupe circuit et scope des variables
+s8 = '''fonctionValue toto(a, b) { 
+            if (a == 0) return b; 
+            c = toto(a - 1, b1); 
+            return c; 
+            print(666); 
+        } 
+        x = toto(3, 5); 
+        print(x);'''
+
+yacc.parse(s5)
